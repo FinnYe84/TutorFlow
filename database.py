@@ -1,21 +1,40 @@
-import sqlite3
+import streamlit as st
 import pandas as pd
+import sqlite3
+import os
 
-DB_NAME = "tutor_management.db"
-
+# Use SQLite for local development, PostgreSQL (Supabase) for deployment
 def get_connection():
-    return sqlite3.connect(DB_NAME)
+    if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
+        # Use st.connection for PostgreSQL
+        conn = st.connection("postgresql", type="sql")
+        return conn
+    else:
+        # Fallback to SQLite locally
+        DB_NAME = "tutor_management.db"
+        return sqlite3.connect(DB_NAME)
 
 def run_query(query, params=()):
-    with get_connection() as conn:
+    conn = get_connection()
+    if isinstance(conn, sqlite3.Connection):
         return pd.read_sql_query(query, conn, params=params)
+    else:
+        # st.connection returns a data object
+        return conn.query(query, params=params, ttl=0)
 
 def run_update(query, params=()):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        conn.commit()
-        return cursor.lastrowid
+    conn = get_connection()
+    if isinstance(conn, sqlite3.Connection):
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return cursor.lastrowid
+    else:
+        # st.connection update logic
+        with conn.session as s:
+            s.execute(query, params)
+            s.commit()
+            return None # PostgreSQL serial usually handles this, but st.connection is simpler
 
 def get_all_students(only_active=False):
     if only_active:
@@ -34,42 +53,40 @@ def get_all_rooms(only_active=False):
 
 def set_active_status(table, entity_id, status):
     # Valid tables: Students, Teachers, Rooms, Users
-    query = f"UPDATE {table} SET is_active = ? WHERE id = ?"
-    run_update(query, (1 if status else 0, entity_id))
+    query = f"UPDATE {table} SET is_active = :status WHERE id = :id"
+    run_update(query, {"status": 1 if status else 0, "id": entity_id})
     
     # Smart cleanup if deactivating
     if not status:
         if table == 'Students':
             # Remove from all current enrollments and waitlists
-            run_update("DELETE FROM Enrollments WHERE student_id = ?", (entity_id,))
-            run_update("DELETE FROM Waitlists WHERE student_id = ?", (entity_id,))
+            run_update("DELETE FROM Enrollments WHERE student_id = :id", {"id": entity_id})
+            run_update("DELETE FROM Waitlists WHERE student_id = :id", {"id": entity_id})
         elif table == 'Teachers':
             # Set teacher_id to NULL in Classes
-            run_update("UPDATE Classes SET teacher_id = NULL WHERE teacher_id = ?", (entity_id,))
+            run_update("UPDATE Classes SET teacher_id = NULL WHERE teacher_id = :id", {"id": entity_id})
             # Also update the corresponding User account if it exists
-            run_update("UPDATE Users SET is_active = 0 WHERE teacher_id = ?", (entity_id,))
+            run_update("UPDATE Users SET is_active = 0 WHERE teacher_id = :id", {"id": entity_id})
         elif table == 'Rooms':
             # Set room_id to NULL in Classes
-            run_update("UPDATE Classes SET room_id = NULL WHERE room_id = ?", (entity_id,))
+            run_update("UPDATE Classes SET room_id = NULL WHERE room_id = :id", {"id": entity_id})
     elif status and table == 'Teachers':
         # If reactivating a teacher, reactivate their user account too
-        run_update("UPDATE Users SET is_active = 1 WHERE teacher_id = ?", (entity_id,))
+        run_update("UPDATE Users SET is_active = 1 WHERE teacher_id = :id", {"id": entity_id})
 
 def delete_entity(table, entity_id):
     # Check for dependencies first (simplified)
     if table == 'Students':
-        run_update("DELETE FROM Enrollments WHERE student_id = ?", (entity_id,))
-        run_update("DELETE FROM Attendance WHERE student_id = ?", (entity_id,))
-        run_update("DELETE FROM Waitlists WHERE student_id = ?", (entity_id,))
+        run_update("DELETE FROM Enrollments WHERE student_id = :id", {"id": entity_id})
+        run_update("DELETE FROM Attendance WHERE student_id = :id", {"id": entity_id})
+        run_update("DELETE FROM Waitlists WHERE student_id = :id", {"id": entity_id})
     elif table == 'Teachers':
-        # Don't delete teacher if they have classes? Or just set teacher_id to NULL?
-        # Let's set teacher_id to NULL in Classes
-        run_update("UPDATE Classes SET teacher_id = NULL WHERE teacher_id = ?", (entity_id,))
-        run_update("DELETE FROM Users WHERE teacher_id = ?", (entity_id,))
+        run_update("UPDATE Classes SET teacher_id = NULL WHERE teacher_id = :id", {"id": entity_id})
+        run_update("DELETE FROM Users WHERE teacher_id = :id", {"id": entity_id})
     elif table == 'Rooms':
-        run_update("UPDATE Classes SET room_id = NULL WHERE room_id = ?", (entity_id,))
+        run_update("UPDATE Classes SET room_id = NULL WHERE room_id = :id", {"id": entity_id})
     
-    run_update(f"DELETE FROM {table} WHERE id = ?", (entity_id,))
+    run_update(f"DELETE FROM {table} WHERE id = :id", {"id": entity_id})
 
 def get_all_classes():
     query = """
@@ -86,17 +103,18 @@ def get_all_classes_for_term(term):
     FROM Classes c
     LEFT JOIN Teachers t ON c.teacher_id = t.id
     LEFT JOIN Rooms r ON c.room_id = r.id
-    WHERE c.term = ?
+    WHERE c.term = :term
     """
-    return run_query(query, (term,))
+    return run_query(query, {"term": term})
 
 def get_enrollment_count(class_id):
-    query = "SELECT count(*) as count FROM Enrollments WHERE class_id = ?"
-    return run_query(query, (class_id,)).iloc[0]['count']
+    query = "SELECT count(*) as count FROM Enrollments WHERE class_id = :id"
+    res = run_query(query, {"id": class_id})
+    return res.iloc[0]['count']
 
 def get_attendance(student_id, class_id, week_number):
-    query = "SELECT status FROM Attendance WHERE student_id = ? AND class_id = ? AND week_number = ?"
-    res = run_query(query, (student_id, class_id, week_number))
+    query = "SELECT status FROM Attendance WHERE student_id = :sid AND class_id = :cid AND week_number = :wn"
+    res = run_query(query, {"sid": student_id, "cid": class_id, "wn": week_number})
     if not res.empty:
         return res.iloc[0]['status']
     return None
@@ -105,45 +123,48 @@ def update_attendance(student_id, class_id, week_number, status):
     # Check if record exists
     existing = get_attendance(student_id, class_id, week_number)
     if existing is not None:
-        run_update("UPDATE Attendance SET status = ? WHERE student_id = ? AND class_id = ? AND week_number = ?", 
-                   (status, student_id, class_id, week_number))
+        run_update("UPDATE Attendance SET status = :status WHERE student_id = :sid AND class_id = :cid AND week_number = :wn", 
+                   {"status": status, "sid": student_id, "cid": class_id, "wn": week_number})
     else:
-        run_update("INSERT INTO Attendance (student_id, class_id, week_number, status) VALUES (?, ?, ?, ?)", 
-                   (student_id, class_id, week_number, status))
+        run_update("INSERT INTO Attendance (student_id, class_id, week_number, status) VALUES (:sid, :cid, :wn, :status)", 
+                   {"sid": student_id, "cid": class_id, "wn": week_number, "status": status})
 
 def get_classes_for_teacher(teacher_id):
     query = """
     SELECT c.*, r.name as room_name 
     FROM Classes c
     LEFT JOIN Rooms r ON c.room_id = r.id
-    WHERE c.teacher_id = ?
+    WHERE c.teacher_id = :id
     """
-    return run_query(query, (teacher_id,))
+    return run_query(query, {"id": teacher_id})
 
 def check_overlaps(day_of_week, start_time, end_time, teacher_id, room_id, term):
     # This checks for overlaps within the same term
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        
-        # Check teacher overlap
-        cursor.execute("""
-            SELECT id FROM Classes 
-            WHERE day_of_week = ? AND term = ? AND teacher_id = ?
-            AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (? <= start_time AND ? >= end_time))
-        """, (day_of_week, term, teacher_id, start_time, start_time, end_time, end_time, start_time, end_time))
-        
-        teacher_conflict = cursor.fetchone()
-        
-        # Check room overlap
-        cursor.execute("""
-            SELECT id FROM Classes 
-            WHERE day_of_week = ? AND term = ? AND room_id = ?
-            AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (? <= start_time AND ? >= end_time))
-        """, (day_of_week, term, room_id, start_time, start_time, end_time, end_time, start_time, end_time))
-        
-        room_conflict = cursor.fetchone()
-        
-        return teacher_conflict, room_conflict
+    # PostgreSQL syntax uses :param for named parameters in st.connection
+    params = {
+        "dow": day_of_week, 
+        "term": term, 
+        "tid": teacher_id, 
+        "rid": room_id, 
+        "st": start_time, 
+        "et": end_time
+    }
+    
+    teacher_query = """
+        SELECT id FROM Classes 
+        WHERE day_of_week = :dow AND term = :term AND teacher_id = :tid
+        AND ((start_time <= :st AND end_time > :st) OR (start_time < :et AND end_time >= :et) OR (:st <= start_time AND :et >= end_time))
+    """
+    teacher_conflict = not run_query(teacher_query, params).empty
+    
+    room_query = """
+        SELECT id FROM Classes 
+        WHERE day_of_week = :dow AND term = :term AND room_id = :rid
+        AND ((start_time <= :st AND end_time > :st) OR (start_time < :et AND end_time >= :et) OR (:st <= start_time AND :et >= end_time))
+    """
+    room_conflict = not run_query(room_query, params).empty
+    
+    return teacher_conflict, room_conflict
 
 def get_class_details(class_id):
     query = """
@@ -151,34 +172,31 @@ def get_class_details(class_id):
     FROM Classes c
     LEFT JOIN Teachers t ON c.teacher_id = t.id
     LEFT JOIN Rooms r ON c.room_id = r.id
-    WHERE c.id = ?
+    WHERE c.id = :id
     """
-    return run_query(query, (class_id,))
+    return run_query(query, {"id": class_id})
 
 def get_students_in_class(class_id):
     query = """
     SELECT s.*, e.retention_status
     FROM Students s
     JOIN Enrollments e ON s.id = e.student_id
-    WHERE e.class_id = ?
+    WHERE e.class_id = :id
     """
-    return run_query(query, (class_id,))
+    return run_query(query, {"id": class_id})
 
 def get_waitlist_for_class(class_id):
     query = """
     SELECT s.*
     FROM Students s
     JOIN Waitlists w ON s.id = w.student_id
-    WHERE w.class_id = ?
+    WHERE w.class_id = :id
     """
-    return run_query(query, (class_id,))
+    return run_query(query, {"id": class_id})
 
 def get_user_by_username(username):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Users WHERE username = ?", (username,))
-        user = cursor.fetchone()
-        if user:
-            columns = [column[0] for column in cursor.description]
-            return dict(zip(columns, user))
-        return None
+    query = "SELECT * FROM Users WHERE username = :un"
+    res = run_query(query, {"un": username})
+    if not res.empty:
+        return res.iloc[0].to_dict()
+    return None

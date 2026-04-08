@@ -2,3 +2,5 @@ streamlit
 pandas
 bcrypt
 streamlit-authenticator
+psycopg2-binary
+sqlalchemy
