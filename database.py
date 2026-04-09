@@ -248,3 +248,11 @@ def update_user_password(user_id, new_hashed_password):
 def reset_teacher_password(teacher_id, new_hashed_password):
     query = "UPDATE Users SET password_hash = :pw WHERE teacher_id = :tid"
     run_update(query, {"pw": new_hashed_password, "tid": teacher_id})
+
+def get_attendance_for_class(class_id):
+    """
+    Fetches all attendance records for a specific class in one go.
+    This fixes the slow loading and prevents TimeoutErrors.
+    """
+    query = "SELECT student_id, week_number, status FROM Attendance WHERE class_id = :id"
+    return run_query(query, {"id": class_id})
