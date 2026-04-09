@@ -24,10 +24,10 @@ import os
 def get_connection():
     st.write(f"Secrets keys found: {list(st.secrets.keys())}")
     
-    if "connections" in st.secrets:
-         st.write("✅ Found 'connections' in secrets")
-    else:
-         st.error("❌ 'connections' NOT found in secrets. Check your formatting!")
+###    if "connections" in st.secrets:
+###         st.write("✅ Found 'connections' in secrets")
+###    else:
+###         st.error("❌ 'connections' NOT found in secrets. Check your formatting!")
     if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
         # Use st.connection for PostgreSQL
         conn = st.connection("postgresql", type="sql")
