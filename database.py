@@ -16,16 +16,20 @@ def get_connection():
         DB_NAME = "tutor_management.db"
         return sqlite3.connect(DB_NAME)
 
-def run_query(query, params=()):
+def run_query(query, params=None):
+    if params is None:
+        params = {}
     conn = get_connection()
     if isinstance(conn, sqlite3.Connection):
         return pd.read_sql_query(query, conn, params=params)
     else:
         # st.connection returns a data object
-        # Wrap query in sqlalchemy text() for PostgreSQL
-        return conn.query(text(query), params=params, ttl=0)
+        # Don't use text() here, st.connection handles it and it causes UnhashableParamError
+        return conn.query(query, params=params, ttl=0)
 
-def run_update(query, params=()):
+def run_update(query, params=None):
+    if params is None:
+        params = {}
     conn = get_connection()
     if isinstance(conn, sqlite3.Connection):
         with conn:
