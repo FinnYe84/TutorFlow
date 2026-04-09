@@ -12,6 +12,97 @@ def show_class_setup():
         df_classes = get_all_classes()
         if not df_classes.empty:
             st.dataframe(df_classes)
+            
+            st.subheader("Class Actions")
+            class_to_manage = st.selectbox("Select Class to Manage", 
+                                            options=df_classes['id'].tolist(),
+                                            format_func=lambda x: f"{df_classes[df_classes['id'] == x]['subject'].values[0]} ({df_classes[df_classes['id'] == x]['day_of_week'].values[0]} {df_classes[df_classes['id'] == x]['start_time'].values[0]})")
+            
+            if st.button("🗑️ Delete Class", key="delete_class_btn"):
+                # Clean up enrollments and waitlists first
+                run_update("DELETE FROM Enrollments WHERE class_id = :id", {"id": class_to_manage})
+                run_update("DELETE FROM Waitlists WHERE class_id = :id", {"id": class_to_manage})
+                run_update("DELETE FROM Attendance WHERE class_id = :id", {"id": class_to_manage})
+                run_update("DELETE FROM Classes WHERE id = :id", {"id": class_to_manage})
+                st.success("Class deleted successfully.")
+                st.rerun()
+            
+            with st.expander("📝 Edit Class Details"):
+                cls_data = df_classes[df_classes['id'] == class_to_manage].iloc[0]
+                
+                with st.form("edit_class_form"):
+                    edit_subject = st.text_input("Subject", value=cls_data['subject'])
+                    edit_day = st.selectbox("Day of Week", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], 
+                                            index=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].index(cls_data['day_of_week']))
+                    
+                    # Convert time strings to time objects
+                    from datetime import datetime
+                    curr_start = datetime.strptime(cls_data['start_time'], "%H:%M").time()
+                    curr_end = datetime.strptime(cls_data['end_time'], "%H:%M").time()
+                    
+                    edit_start = st.time_input("Start Time", value=curr_start)
+                    edit_end = st.time_input("End Time", value=curr_end)
+                    
+                    # Only show active teachers and rooms
+                    teachers_edit = get_all_teachers(only_active=True)
+                    teacher_options_edit = {row['name']: row['id'] for _, row in teachers_edit.iterrows()}
+                    # If current teacher is inactive, we still need them in the list or handle it
+                    curr_teacher_name = cls_data['teacher_name'] if pd.notna(cls_data['teacher_name']) else "None"
+                    if curr_teacher_name not in teacher_options_edit and pd.notna(cls_data['teacher_id']):
+                         teacher_options_edit[curr_teacher_name] = int(cls_data['teacher_id'])
+                    
+                    edit_teacher = st.selectbox("Teacher", list(teacher_options_edit.keys()), 
+                                                index=list(teacher_options_edit.keys()).index(curr_teacher_name) if curr_teacher_name in teacher_options_edit else 0)
+                    
+                    rooms_edit = get_all_rooms(only_active=True)
+                    room_data_edit = {row['name']: (row['id'], row['capacity']) for _, row in rooms_edit.iterrows()}
+                    curr_room_name = cls_data['room_name'] if pd.notna(cls_data['room_name']) else "None"
+                    if curr_room_name not in room_data_edit and pd.notna(cls_data['room_id']):
+                        # We don't have the capacity for an inactive room easily here, but let's assume it's large enough or handle it
+                        room_data_edit[curr_room_name] = (int(cls_data['room_id']), 999) 
+                    
+                    edit_room = st.selectbox("Room", list(room_data_edit.keys()), 
+                                             index=list(room_data_edit.keys()).index(curr_room_name) if curr_room_name in room_data_edit else 0)
+                    
+                    if edit_room:
+                        st.info(f"Selected room capacity: {room_data_edit[edit_room][1]}")
+                    
+                    edit_max_cap = st.number_input("Max Capacity", min_value=1, value=int(cls_data['max_capacity']))
+                    
+                    terms_df_edit = run_query("SELECT * FROM Academic_Calendar")
+                    term_options_edit = [f"{row['term_name']} {row['year']}" for _, row in terms_df_edit.iterrows()]
+                    curr_term = cls_data['term']
+                    edit_term = st.selectbox("Term", term_options_edit, 
+                                             index=term_options_edit.index(curr_term) if curr_term in term_options_edit else 0)
+                    
+                    if st.form_submit_button("Update Class"):
+                        start_str_edit = edit_start.strftime("%H:%M")
+                        end_str_edit = edit_end.strftime("%H:%M")
+                        teacher_id_edit = teacher_options_edit[edit_teacher]
+                        room_id_edit, room_cap_edit = room_data_edit[edit_room]
+                        
+                        if edit_max_cap > room_cap_edit:
+                            st.error(f"Class capacity ({edit_max_cap}) cannot exceed room capacity ({room_cap_edit})!")
+                        else:
+                            # Use the updated check_overlaps with exclude_class_id
+                            t_conf, r_conf = check_overlaps(edit_day, start_str_edit, end_str_edit, teacher_id_edit, room_id_edit, edit_term, exclude_class_id=class_to_manage)
+                            
+                            if t_conf:
+                                st.error("Teacher already has a class during this time!")
+                            elif r_conf:
+                                st.error("Room is already occupied during this time!")
+                            else:
+                                run_update("""
+                                    UPDATE Classes 
+                                    SET subject = :subject, day_of_week = :dow, start_time = :start, 
+                                        end_time = :end, teacher_id = :tid, room_id = :rid, 
+                                        max_capacity = :cap, term = :term 
+                                    WHERE id = :id
+                                """, {"subject": edit_subject, "dow": edit_day, "start": start_str_edit, 
+                                      "end": end_str_edit, "tid": teacher_id_edit, "rid": room_id_edit, 
+                                      "cap": edit_max_cap, "term": edit_term, "id": class_to_manage})
+                                st.success("Class updated successfully!")
+                                st.rerun()
         else:
             st.info("No classes found.")
         

@@ -171,9 +171,8 @@ def get_classes_for_teacher(teacher_id):
     """
     return run_query(query, {"id": teacher_id})
 
-def check_overlaps(day_of_week, start_time, end_time, teacher_id, room_id, term):
+def check_overlaps(day_of_week, start_time, end_time, teacher_id, room_id, term, exclude_class_id=None):
     # This checks for overlaps within the same term
-    # PostgreSQL syntax uses :param for named parameters in st.connection
     params = {
         "dow": day_of_week, 
         "term": term, 
@@ -188,6 +187,9 @@ def check_overlaps(day_of_week, start_time, end_time, teacher_id, room_id, term)
         WHERE day_of_week = :dow AND term = :term AND teacher_id = :tid
         AND ((start_time <= :st AND end_time > :st) OR (start_time < :et AND end_time >= :et) OR (:st <= start_time AND :et >= end_time))
     """
+    if exclude_class_id:
+        teacher_query += " AND id != :ex_id"
+        params["ex_id"] = exclude_class_id
     teacher_conflict = not run_query(teacher_query, params).empty
     
     room_query = """
@@ -195,6 +197,9 @@ def check_overlaps(day_of_week, start_time, end_time, teacher_id, room_id, term)
         WHERE day_of_week = :dow AND term = :term AND room_id = :rid
         AND ((start_time <= :st AND end_time > :st) OR (start_time < :et AND end_time >= :et) OR (:st <= start_time AND :et >= end_time))
     """
+    if exclude_class_id:
+        room_query += " AND id != :ex_id"
+        params["ex_id"] = exclude_class_id
     room_conflict = not run_query(room_query, params).empty
     
     return teacher_conflict, room_conflict

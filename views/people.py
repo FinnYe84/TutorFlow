@@ -36,6 +36,28 @@ def show_people():
                     delete_entity('Students', student_to_manage)
                     st.success(f"Student deleted.")
                     st.rerun()
+            
+            # Edit Student Section
+            with st.expander("📝 Edit Student Details"):
+                student_data = df_students[df_students['id'] == student_to_manage].iloc[0]
+                with st.form("edit_student_form"):
+                    new_name = st.text_input("Name", value=student_data['name'])
+                    new_grade = st.text_input("Grade", value=student_data['grade'])
+                    new_parent = st.text_input("Parent Name", value=student_data['parent_name'])
+                    new_mobile = st.text_input("Mobile", value=student_data['mobile'])
+                    new_email = st.text_input("Email", value=student_data['email'])
+                    
+                    if st.form_submit_button("Update Student"):
+                        if new_name:
+                            run_update("""
+                                UPDATE Students 
+                                SET name = :name, grade = :grade, parent_name = :parent, mobile = :mobile, email = :email 
+                                WHERE id = :id
+                            """, {"name": new_name, "grade": new_grade, "parent": new_parent, "mobile": new_mobile, "email": new_email, "id": student_to_manage})
+                            st.success("Student updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Name is required.")
         else:
             st.info("No students found.")
         
@@ -84,6 +106,31 @@ def show_people():
                     delete_entity('Teachers', teacher_to_manage)
                     st.success(f"Teacher deleted.")
                     st.rerun()
+            
+            # Edit Teacher Section
+            with st.expander("📝 Edit Teacher Details"):
+                teacher_data = df_teachers[df_teachers['id'] == teacher_to_manage].iloc[0]
+                with st.form("edit_teacher_form"):
+                    new_name = st.text_input("Teacher Name", value=teacher_data['name'])
+                    new_subject = st.text_input("Subject", value=teacher_data['subject'])
+                    new_rate = st.number_input("Hourly Rate", min_value=0.0, format="%.2f", value=float(teacher_data['hourly_rate']))
+                    new_phone = st.text_input("Phone", value=teacher_data['phone'])
+                    
+                    if st.form_submit_button("Update Teacher"):
+                        if new_name:
+                            run_update("""
+                                UPDATE Teachers 
+                                SET name = :name, subject = :subject, hourly_rate = :rate, phone = :phone 
+                                WHERE id = :id
+                            """, {"name": new_name, "subject": new_subject, "rate": new_rate, "phone": new_phone, "id": teacher_to_manage})
+                            
+                            # Also update the User's full name if it exists
+                            run_update("UPDATE Users SET full_name = :name WHERE teacher_id = :id", {"name": new_name, "id": teacher_to_manage})
+                            
+                            st.success("Teacher updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Name is required.")
             
             # Admin Reset Teacher Password
             st.divider()
@@ -152,6 +199,25 @@ def show_people():
                     delete_entity('Rooms', room_to_manage)
                     st.success(f"Room deleted.")
                     st.rerun()
+            
+            # Edit Room Section
+            with st.expander("📝 Edit Room Details"):
+                room_data_edit = df_rooms[df_rooms['id'] == room_to_manage].iloc[0]
+                with st.form("edit_room_form"):
+                    new_room_name = st.text_input("Room Name/Number", value=room_data_edit['name'])
+                    new_capacity = st.number_input("Capacity", min_value=1, value=int(room_data_edit['capacity']))
+                    
+                    if st.form_submit_button("Update Room"):
+                        if new_room_name:
+                            run_update("""
+                                UPDATE Rooms 
+                                SET name = :name, capacity = :cap 
+                                WHERE id = :id
+                            """, {"name": new_room_name, "cap": new_capacity, "id": room_to_manage})
+                            st.success("Room updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Room name is required.")
         else:
             st.info("No rooms found.")
         
