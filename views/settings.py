@@ -2,6 +2,65 @@ import streamlit as st
 import pandas as pd
 from database import run_query, run_update
 
+@st.dialog("Edit Term")
+def edit_term_dialog(term_id):
+    terms_df = run_query("SELECT * FROM Academic_Calendar")
+    term_data = terms_df[terms_df['id'] == term_id].iloc[0]
+    from datetime import datetime
+    curr_start = datetime.strptime(term_data['start_date'], "%Y-%m-%d").date()
+    curr_end = datetime.strptime(term_data['end_date'], "%Y-%m-%d").date()
+    
+    with st.form("edit_term_form_dialog"):
+        edit_term_name = st.text_input("Term Name", value=term_data['term_name'])
+        edit_year = st.number_input("Year", min_value=2020, value=int(term_data['year']))
+        edit_start = st.date_input("Start Date", value=curr_start)
+        edit_end = st.date_input("End Date", value=curr_end)
+        
+        if st.form_submit_button("Update Term"):
+            run_update("""
+                UPDATE Academic_Calendar 
+                SET term_name = :name, year = :year, start_date = :start, end_date = :end 
+                WHERE id = :id
+            """, {"name": edit_term_name, "year": edit_year, "start": edit_start.strftime("%Y-%m-%d"), "end": edit_end.strftime("%Y-%m-%d"), "id": term_id})
+            st.success("Term updated!")
+            st.rerun()
+
+@st.dialog("Delete Term")
+def delete_term_dialog(term_id, term_name):
+    st.warning(f"Are you sure you want to delete **{term_name}**?")
+    if st.button("Yes, Delete"):
+        run_update("DELETE FROM Academic_Calendar WHERE id = :id", {"id": term_id})
+        st.success("Term deleted.")
+        st.rerun()
+
+@st.dialog("Edit Holiday")
+def edit_holiday_dialog(holiday_id):
+    holidays_df = run_query("SELECT * FROM Public_Holidays")
+    holiday_data = holidays_df[holidays_df['id'] == holiday_id].iloc[0]
+    from datetime import datetime
+    curr_holiday_date = datetime.strptime(holiday_data['holiday_date'], "%Y-%m-%d").date()
+    
+    with st.form("edit_holiday_form_dialog"):
+        edit_holiday_name = st.text_input("Holiday Name", value=holiday_data['holiday_name'])
+        edit_holiday_date = st.date_input("Holiday Date", value=curr_holiday_date)
+        
+        if st.form_submit_button("Update Holiday"):
+            run_update("""
+                UPDATE Public_Holidays 
+                SET holiday_name = :name, holiday_date = :date 
+                WHERE id = :id
+            """, {"name": edit_holiday_name, "date": edit_holiday_date.strftime("%Y-%m-%d"), "id": holiday_id})
+            st.success("Holiday updated!")
+            st.rerun()
+
+@st.dialog("Delete Holiday")
+def delete_holiday_dialog(holiday_id, holiday_name):
+    st.warning(f"Are you sure you want to delete **{holiday_name}**?")
+    if st.button("Yes, Delete"):
+        run_update("DELETE FROM Public_Holidays WHERE id = :id", {"id": holiday_id})
+        st.success("Holiday deleted.")
+        st.rerun()
+
 def show_settings():
     st.title("School Settings")
     
@@ -11,50 +70,36 @@ def show_settings():
         st.header("Academic Calendar")
         terms_df = run_query("SELECT * FROM Academic_Calendar")
         if not terms_df.empty:
-            st.dataframe(terms_df)
+            # Table Header
+            hcol1, hcol2, hcol3, hcol4 = st.columns([2, 1, 3, 3])
+            hcol1.write("**Term**")
+            hcol2.write("**Year**")
+            hcol3.write("**Dates**")
+            hcol4.write("**Actions**")
+            st.divider()
             
-            st.subheader("Manage Term")
-            term_to_manage = st.selectbox("Select Term to Edit/Delete", 
-                                           options=terms_df['id'].tolist(),
-                                           format_func=lambda x: f"{terms_df[terms_df['id'] == x]['term_name'].values[0]} {terms_df[terms_df['id'] == x]['year'].values[0]}")
-            
-            if st.button("🗑️ Delete Term", key="delete_term_btn"):
-                run_update("DELETE FROM Academic_Calendar WHERE id = :id", {"id": term_to_manage})
-                st.success("Term deleted.")
-                st.rerun()
-            
-            with st.expander("📝 Edit Term Details"):
-                term_data = terms_df[terms_df['id'] == term_to_manage].iloc[0]
-                from datetime import datetime
-                curr_start = datetime.strptime(term_data['start_date'], "%Y-%m-%d").date()
-                curr_end = datetime.strptime(term_data['end_date'], "%Y-%m-%d").date()
+            for _, term in terms_df.iterrows():
+                rcol1, rcol2, rcol3, rcol4 = st.columns([2, 1, 3, 3])
+                rcol1.write(term['term_name'])
+                rcol2.write(str(term['year']))
+                rcol3.write(f"{term['start_date']} to {term['end_date']}")
                 
-                with st.form("edit_term_form"):
-                    edit_term_name = st.text_input("Term Name", value=term_data['term_name'])
-                    edit_year = st.number_input("Year", min_value=2020, value=int(term_data['year']))
-                    edit_start = st.date_input("Start Date", value=curr_start)
-                    edit_end = st.date_input("End Date", value=curr_end)
-                    
-                    if st.form_submit_button("Update Term"):
-                        run_update("""
-                            UPDATE Academic_Calendar 
-                            SET term_name = :name, year = :year, start_date = :start, end_date = :end 
-                            WHERE id = :id
-                        """, {"name": edit_term_name, "year": edit_year, "start": edit_start.strftime("%Y-%m-%d"), "end": edit_end.strftime("%Y-%m-%d"), "id": term_to_manage})
-                        st.success("Term updated successfully!")
-                        st.rerun()
+                with rcol4:
+                    acol1, acol2 = st.columns(2)
+                    if acol1.button("Modify", key=f"edit_trm_{term['id']}"):
+                        edit_term_dialog(term['id'])
+                    if acol2.button("Delete", key=f"del_trm_{term['id']}"):
+                        delete_term_dialog(term['id'], f"{term['term_name']} {term['year']}")
         else:
             st.info("No terms configured.")
             
-        with st.expander("Add New Term"):
+        with st.expander("➕ Add New Term"):
             with st.form("add_term_form"):
                 term_name = st.text_input("Term Name (e.g. Term 1)")
                 year = st.number_input("Year", min_value=2020, value=2026)
                 start_date = st.date_input("Start Date")
                 end_date = st.date_input("End Date")
-                submitted = st.form_submit_button("Add Term")
-                
-                if submitted:
+                if st.form_submit_button("Add Term"):
                     run_update("INSERT INTO Academic_Calendar (term_name, year, start_date, end_date) VALUES (:name, :year, :start, :end)", 
                                {"name": term_name, "year": year, "start": start_date.strftime("%Y-%m-%d"), "end": end_date.strftime("%Y-%m-%d")})
                     st.success(f"Added term: {term_name} {year}")
@@ -64,45 +109,32 @@ def show_settings():
         st.header("Public Holidays")
         holidays_df = run_query("SELECT * FROM Public_Holidays")
         if not holidays_df.empty:
-            st.dataframe(holidays_df)
+            # Table Header
+            hcol1, hcol2, hcol3 = st.columns([3, 3, 3])
+            hcol1.write("**Holiday Name**")
+            hcol2.write("**Date**")
+            hcol3.write("**Actions**")
+            st.divider()
             
-            st.subheader("Manage Holiday")
-            holiday_to_manage = st.selectbox("Select Holiday to Edit/Delete", 
-                                              options=holidays_df['id'].tolist(),
-                                              format_func=lambda x: f"{holidays_df[holidays_df['id'] == x]['holiday_name'].values[0]} ({holidays_df[holidays_df['id'] == x]['holiday_date'].values[0]})")
-            
-            if st.button("🗑️ Delete Holiday", key="delete_holiday_btn"):
-                run_update("DELETE FROM Public_Holidays WHERE id = :id", {"id": holiday_to_manage})
-                st.success("Holiday deleted.")
-                st.rerun()
-            
-            with st.expander("📝 Edit Holiday Details"):
-                holiday_data = holidays_df[holidays_df['id'] == holiday_to_manage].iloc[0]
-                from datetime import datetime
-                curr_holiday_date = datetime.strptime(holiday_data['holiday_date'], "%Y-%m-%d").date()
+            for _, holiday in holidays_df.iterrows():
+                rcol1, rcol2, rcol3 = st.columns([3, 3, 3])
+                rcol1.write(holiday['holiday_name'])
+                rcol2.write(holiday['holiday_date'])
                 
-                with st.form("edit_holiday_form"):
-                    edit_holiday_name = st.text_input("Holiday Name", value=holiday_data['holiday_name'])
-                    edit_holiday_date = st.date_input("Holiday Date", value=curr_holiday_date)
-                    
-                    if st.form_submit_button("Update Holiday"):
-                        run_update("""
-                            UPDATE Public_Holidays 
-                            SET holiday_name = :name, holiday_date = :date 
-                            WHERE id = :id
-                        """, {"name": edit_holiday_name, "date": edit_holiday_date.strftime("%Y-%m-%d"), "id": holiday_to_manage})
-                        st.success("Holiday updated successfully!")
-                        st.rerun()
+                with rcol3:
+                    acol1, acol2 = st.columns(2)
+                    if acol1.button("Modify", key=f"edit_hld_{holiday['id']}"):
+                        edit_holiday_dialog(holiday['id'])
+                    if acol2.button("Delete", key=f"del_hld_{holiday['id']}"):
+                        delete_holiday_dialog(holiday['id'], holiday['holiday_name'])
         else:
             st.info("No public holidays configured.")
             
-        with st.expander("Add Public Holiday"):
+        with st.expander("➕ Add Public Holiday"):
             with st.form("add_holiday_form"):
                 holiday_name = st.text_input("Holiday Name")
                 holiday_date = st.date_input("Holiday Date")
-                submitted = st.form_submit_button("Add Holiday")
-                
-                if submitted:
+                if st.form_submit_button("Add Holiday"):
                     run_update("INSERT INTO Public_Holidays (holiday_date, holiday_name) VALUES (:date, :name)", 
                                {"date": holiday_date.strftime("%Y-%m-%d"), "name": holiday_name})
                     st.success(f"Added holiday: {holiday_name}")
