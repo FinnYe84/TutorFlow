@@ -228,9 +228,11 @@ def get_waitlist_for_class(class_id):
     return run_query(query, {"id": class_id})
 
 def get_user_by_username(username):
-    query = "SELECT * FROM Users WHERE username = :un"
+    # Use LOWER() for case-insensitive username lookup in PostgreSQL
+    query = "SELECT * FROM Users WHERE LOWER(username) = LOWER(:un)"
     res = run_query(query, {"un": username})
     if not res.empty:
+        # Convert the first row to a dictionary
         return res.iloc[0].to_dict()
     return None
 
