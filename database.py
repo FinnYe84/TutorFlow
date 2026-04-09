@@ -21,11 +21,24 @@ def run_query(query, params=None):
         params = {}
     conn = get_connection()
     if isinstance(conn, sqlite3.Connection):
+        # SQLite works with ? but if we use named params (:name) it also works.
+        # We'll stick to what the caller provides.
         return pd.read_sql_query(query, conn, params=params)
     else:
-        # st.connection returns a data object
-        # Don't use text() here, st.connection handles it and it causes UnhashableParamError
-        return conn.query(query, params=params, ttl=0)
+        # st.connection (PostgreSQL)
+        # SQLAlchemy's text() MUST use named parameters (:name)
+        if isinstance(params, (list, tuple)):
+            new_query = query
+            new_params = {}
+            for i, val in enumerate(params):
+                placeholder = f":p{i}"
+                # Replace ONLY the first '?' found
+                new_query = new_query.replace("?", placeholder, 1)
+                new_params[f"p{i}"] = val
+            query = new_query
+            params = new_params
+        
+        return conn.query(text(query), params=params, ttl=0)
 
 def run_update(query, params=None):
     if params is None:
@@ -37,7 +50,17 @@ def run_update(query, params=None):
             cursor.execute(query, params)
             return cursor.lastrowid
     else:
-        # st.connection update logic
+        # st.connection (PostgreSQL)
+        if isinstance(params, (list, tuple)):
+            new_query = query
+            new_params = {}
+            for i, val in enumerate(params):
+                placeholder = f":p{i}"
+                new_query = new_query.replace("?", placeholder, 1)
+                new_params[f"p{i}"] = val
+            query = new_query
+            params = new_params
+            
         with conn.session as s:
             s.execute(text(query), params)
             s.commit()

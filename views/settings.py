@@ -24,8 +24,8 @@ def show_settings():
                 submitted = st.form_submit_button("Add Term")
                 
                 if submitted:
-                    run_update("INSERT INTO Academic_Calendar (term_name, year, start_date, end_date) VALUES (?, ?, ?, ?)", 
-                               (term_name, year, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
+                    run_update("INSERT INTO Academic_Calendar (term_name, year, start_date, end_date) VALUES (:name, :year, :start, :end)", 
+                               {"name": term_name, "year": year, "start": start_date.strftime("%Y-%m-%d"), "end": end_date.strftime("%Y-%m-%d")})
                     st.success(f"Added term: {term_name} {year}")
                     st.rerun()
                     
@@ -44,7 +44,7 @@ def show_settings():
                 submitted = st.form_submit_button("Add Holiday")
                 
                 if submitted:
-                    run_update("INSERT INTO Public_Holidays (holiday_date, holiday_name) VALUES (?, ?)", 
-                               (holiday_date.strftime("%Y-%m-%d"), holiday_name))
+                    run_update("INSERT INTO Public_Holidays (holiday_date, holiday_name) VALUES (:date, :name)", 
+                               {"date": holiday_date.strftime("%Y-%m-%d"), "name": holiday_name})
                     st.success(f"Added holiday: {holiday_name}")
                     st.rerun()

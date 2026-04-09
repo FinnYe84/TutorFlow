@@ -50,8 +50,8 @@ def show_people():
                 
                 if submitted:
                     if name:
-                        run_update("INSERT INTO Students (name, grade, parent_name, mobile, email, is_active) VALUES (?, ?, ?, ?, ?, 1)", 
-                                   (name, grade, parent_name, mobile, email))
+                        run_update("INSERT INTO Students (name, grade, parent_name, mobile, email, is_active) VALUES (:name, :grade, :parent, :mobile, :email, TRUE)", 
+                                   {"name": name, "grade": grade, "parent": parent_name, "mobile": mobile, "email": email})
                         st.success(f"Added student: {name}")
                         st.rerun()
                     else:
@@ -110,15 +110,15 @@ def show_people():
                 
                 if submitted:
                     if name:
-                        teacher_id = run_update("INSERT INTO Teachers (name, subject, hourly_rate, phone, is_active) VALUES (?, ?, ?, ?, 1)", 
-                                   (name, subject, hourly_rate, phone))
+                        teacher_id = run_update("INSERT INTO Teachers (name, subject, hourly_rate, phone, is_active) VALUES (:name, :subject, :rate, :phone, TRUE)", 
+                                   {"name": name, "subject": subject, "rate": hourly_rate, "phone": phone})
                         
                         # Create a corresponding User account (default password is name + 123)
                         import bcrypt
                         default_pw = "password123"
                         hashed_pw = bcrypt.hashpw(default_pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                        run_update("INSERT INTO Users (username, password_hash, role, teacher_id, full_name, is_active) VALUES (?, ?, ?, ?, ?, 1)", 
-                                   (name.lower().replace(" ", "_"), hashed_pw, 'Teacher', teacher_id, name))
+                        run_update("INSERT INTO Users (username, password_hash, role, teacher_id, full_name, is_active) VALUES (:un, :pw, 'Teacher', :tid, :name, TRUE)", 
+                                   {"un": name.lower().replace(" ", "_"), "pw": hashed_pw, "tid": teacher_id, "name": name})
                         
                         st.success(f"Added teacher: {name} (User account created)")
                         st.rerun()
@@ -163,7 +163,8 @@ def show_people():
                 
                 if submitted:
                     if name:
-                        run_update("INSERT INTO Rooms (name, capacity, is_active) VALUES (?, ?, 1)", (name, capacity))
+                        run_update("INSERT INTO Rooms (name, capacity, is_active) VALUES (:name, :cap, TRUE)", 
+                                   {"name": name, "cap": capacity})
                         st.success(f"Added room: {name}")
                         st.rerun()
                     else:

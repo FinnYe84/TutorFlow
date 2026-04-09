@@ -56,8 +56,8 @@ def show_class_setup():
                     else:
                         run_update("""
                             INSERT INTO Classes (subject, day_of_week, start_time, end_time, teacher_id, room_id, max_capacity, term)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (subject, day_of_week, start_str, end_str, teacher_id, room_id, max_capacity, term))
+                            VALUES (:subject, :dow, :start, :end, :tid, :rid, :cap, :term)
+                        """, {"subject": subject, "dow": day_of_week, "start": start_str, "end": end_str, "tid": teacher_id, "rid": room_id, "cap": max_capacity, "term": term})
                         st.success(f"Class '{subject}' created successfully.")
                         st.rerun()
 
@@ -92,11 +92,11 @@ def show_class_setup():
             else:
                 if st.button("Enroll Student"):
                     if current_count < max_cap:
-                        run_update("INSERT INTO Enrollments (student_id, class_id) VALUES (?, ?)", (student_id, class_id))
+                        run_update("INSERT INTO Enrollments (student_id, class_id) VALUES (:sid, :cid)", {"sid": student_id, "cid": class_id})
                         st.success(f"Enrolled {student_name} in {selected_class_label}")
                         st.rerun()
                     else:
                         st.warning("Class is full! Adding to Waitlist.")
-                        run_update("INSERT INTO Waitlists (student_id, class_id) VALUES (?, ?)", (student_id, class_id))
+                        run_update("INSERT INTO Waitlists (student_id, class_id) VALUES (:sid, :cid)", {"sid": student_id, "cid": class_id})
                         st.success(f"Added {student_name} to Waitlist.")
                         st.rerun()
