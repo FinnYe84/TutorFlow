@@ -26,7 +26,7 @@ def run_query(query, params=None):
         return pd.read_sql_query(query, conn, params=params)
     else:
         # st.connection (PostgreSQL)
-        # SQLAlchemy's text() MUST use named parameters (:name)
+        # 1. Convert ? to :p0, :p1 etc if params is a list/tuple
         if isinstance(params, (list, tuple)):
             new_query = query
             new_params = {}
@@ -38,7 +38,8 @@ def run_query(query, params=None):
             query = new_query
             params = new_params
         
-        return conn.query(text(query), params=params, ttl=0)
+        # 2. DO NOT use text() here, it causes UnhashableParamError in Streamlit's cache
+        return conn.query(query, params=params, ttl=0)
 
 def run_update(query, params=None):
     if params is None:
