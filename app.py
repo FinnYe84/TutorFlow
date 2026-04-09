@@ -19,7 +19,8 @@ if check_auth():
         "People": "people",
         "Class Setup": "class_setup",
         "Attendance": "attendance",
-        "Settings": "settings"
+        "Settings": "settings",
+        "My Profile": "profile"
     }
     
     # Remove certain pages if role is Teacher
@@ -46,3 +47,6 @@ if check_auth():
     elif choice == "Settings":
         from views.settings import show_settings
         show_settings()
+    elif choice == "My Profile":
+        from views.profile import show_profile
+        show_profile()

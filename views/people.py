@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from database import run_query, run_update, get_all_students, get_all_teachers, get_all_rooms, set_active_status, delete_entity
+from database import run_query, run_update, get_all_students, get_all_teachers, get_all_rooms, set_active_status, delete_entity, reset_teacher_password
 
 def show_people():
     st.title("People & Resources")
@@ -84,6 +84,19 @@ def show_people():
                     delete_entity('Teachers', teacher_to_manage)
                     st.success(f"Teacher deleted.")
                     st.rerun()
+            
+            # Admin Reset Teacher Password
+            st.divider()
+            st.write("**Admin: Reset Teacher Password**")
+            new_pwd = st.text_input("New Password for Teacher", type="password", key="reset_pwd_input")
+            if st.button("Reset Password", key="reset_pwd_btn"):
+                if new_pwd:
+                    import bcrypt
+                    hashed_pw = bcrypt.hashpw(new_pwd.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                    reset_teacher_password(teacher_to_manage, hashed_pw)
+                    st.success("Teacher password reset successfully!")
+                else:
+                    st.error("Please enter a new password.")
         else:
             st.info("No teachers found.")
         

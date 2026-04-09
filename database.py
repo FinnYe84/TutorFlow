@@ -22,7 +22,7 @@ import os
 
 
 def get_connection():
-    st.write(f"Secrets keys found: {list(st.secrets.keys())}")
+###    st.write(f"Secrets keys found: {list(st.secrets.keys())}")
     
 ###    if "connections" in st.secrets:
 ###         st.write("✅ Found 'connections' in secrets")
@@ -223,3 +223,11 @@ def get_user_by_username(username):
     if not res.empty:
         return res.iloc[0].to_dict()
     return None
+
+def update_user_password(user_id, new_hashed_password):
+    query = "UPDATE Users SET password_hash = :pw WHERE id = :id"
+    run_update(query, {"pw": new_hashed_password, "id": user_id})
+
+def reset_teacher_password(teacher_id, new_hashed_password):
+    query = "UPDATE Users SET password_hash = :pw WHERE teacher_id = :tid"
+    run_update(query, {"pw": new_hashed_password, "tid": teacher_id})
