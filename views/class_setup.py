@@ -28,8 +28,13 @@ def show_class_setup():
                 teacher_name = st.selectbox("Teacher", list(teacher_options.keys()))
                 
                 rooms = get_all_rooms(only_active=True)
-                room_options = {row['name']: row['id'] for _, row in rooms.iterrows()}
-                room_name = st.selectbox("Room", list(room_options.keys()))
+                # Map room names to their ID and capacity
+                room_data = {row['name']: (row['id'], row['capacity']) for _, row in rooms.iterrows()}
+                room_name = st.selectbox("Room", list(room_data.keys()))
+                
+                # Validation will be checked on submit, but we can hint at the room capacity
+                if room_name:
+                    st.info(f"Selected room capacity: {room_data[room_name][1]}")
                 
                 max_capacity = st.number_input("Max Capacity", min_value=1, value=10)
                 
@@ -44,22 +49,26 @@ def show_class_setup():
                     start_str = start_time.strftime("%H:%M")
                     end_str = end_time.strftime("%H:%M")
                     teacher_id = teacher_options[teacher_name]
-                    room_id = room_options[room_name]
+                    room_id, room_capacity = room_data[room_name]
                     
-                    # Automated Validation
-                    teacher_conflict, room_conflict = check_overlaps(day_of_week, start_str, end_str, teacher_id, room_id, term)
-                    
-                    if teacher_conflict:
-                        st.error(f"Teacher {teacher_name} already has a class during this time!")
-                    elif room_conflict:
-                        st.error(f"Room {room_name} is already occupied during this time!")
+                    # New Validation: Class capacity cannot exceed room capacity
+                    if max_capacity > room_capacity:
+                        st.error(f"Class capacity ({max_capacity}) cannot exceed room capacity ({room_capacity}) for {room_name}!")
                     else:
-                        run_update("""
-                            INSERT INTO Classes (subject, day_of_week, start_time, end_time, teacher_id, room_id, max_capacity, term)
-                            VALUES (:subject, :dow, :start, :end, :tid, :rid, :cap, :term)
-                        """, {"subject": subject, "dow": day_of_week, "start": start_str, "end": end_str, "tid": teacher_id, "rid": room_id, "cap": max_capacity, "term": term})
-                        st.success(f"Class '{subject}' created successfully.")
-                        st.rerun()
+                        # Automated Conflict Validation
+                        teacher_conflict, room_conflict = check_overlaps(day_of_week, start_str, end_str, teacher_id, room_id, term)
+                        
+                        if teacher_conflict:
+                            st.error(f"Teacher {teacher_name} already has a class during this time!")
+                        elif room_conflict:
+                            st.error(f"Room {room_name} is already occupied during this time!")
+                        else:
+                            run_update("""
+                                INSERT INTO Classes (subject, day_of_week, start_time, end_time, teacher_id, room_id, max_capacity, term)
+                                VALUES (:subject, :dow, :start, :end, :tid, :rid, :cap, :term)
+                            """, {"subject": subject, "dow": day_of_week, "start": start_str, "end": end_str, "tid": teacher_id, "rid": room_id, "cap": max_capacity, "term": term})
+                            st.success(f"Class '{subject}' created successfully.")
+                            st.rerun()
 
     with tab2:
         st.header("Enroll Students")
