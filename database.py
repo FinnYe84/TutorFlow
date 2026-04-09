@@ -3,31 +3,10 @@ import pandas as pd
 import sqlite3
 import os
 
+from sqlalchemy import text
+
 # Use SQLite for local development, PostgreSQL (Supabase) for deployment
-
-###def get_connection():
-###    try:
-###        if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
-###            # We add a connection timeout so it doesn't hang forever
-###            conn = st.connection("postgresql", type="sql", connect_args={'connect_timeout': 10})
-###            # Try a tiny dummy query to force the connection to actually happen
-###            conn.query("SELECT 1", ttl=0) 
-###            return conn
-###        else:
-###            return sqlite3.connect("tutor_management.db")
-###    except Exception as e:
-###        # This will print the EXACT error message on your website
-###        st.error(f"⚠️ Database Connection Failed: {str(e)}")
-###        return None
-
-
 def get_connection():
-###    st.write(f"Secrets keys found: {list(st.secrets.keys())}")
-    
-###    if "connections" in st.secrets:
-###         st.write("✅ Found 'connections' in secrets")
-###    else:
-###         st.error("❌ 'connections' NOT found in secrets. Check your formatting!")
     if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
         # Use st.connection for PostgreSQL
         conn = st.connection("postgresql", type="sql")
@@ -43,7 +22,8 @@ def run_query(query, params=()):
         return pd.read_sql_query(query, conn, params=params)
     else:
         # st.connection returns a data object
-        return conn.query(query, params=params, ttl=0)
+        # Wrap query in sqlalchemy text() for PostgreSQL
+        return conn.query(text(query), params=params, ttl=0)
 
 def run_update(query, params=()):
     conn = get_connection()
@@ -55,9 +35,9 @@ def run_update(query, params=()):
     else:
         # st.connection update logic
         with conn.session as s:
-            s.execute(query, params)
+            s.execute(text(query), params)
             s.commit()
-            return None # PostgreSQL serial usually handles this, but st.connection is simpler
+            return None
 
 def get_all_students(only_active=False):
     if only_active:
