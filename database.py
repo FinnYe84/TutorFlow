@@ -45,23 +45,25 @@ def run_update(query, params=None):
 
 def get_all_students(only_active=False):
     if only_active:
-        return run_query("SELECT * FROM Students WHERE is_active = 1")
+        # Use boolean literal for PostgreSQL compatibility
+        return run_query("SELECT * FROM Students WHERE is_active = TRUE")
     return run_query("SELECT * FROM Students")
 
 def get_all_teachers(only_active=False):
     if only_active:
-        return run_query("SELECT * FROM Teachers WHERE is_active = 1")
+        return run_query("SELECT * FROM Teachers WHERE is_active = TRUE")
     return run_query("SELECT * FROM Teachers")
 
 def get_all_rooms(only_active=False):
     if only_active:
-        return run_query("SELECT * FROM Rooms WHERE is_active = 1")
+        return run_query("SELECT * FROM Rooms WHERE is_active = TRUE")
     return run_query("SELECT * FROM Rooms")
 
 def set_active_status(table, entity_id, status):
     # Valid tables: Students, Teachers, Rooms, Users
+    # PostgreSQL handles Python booleans (True/False) correctly as BOOLEAN types
     query = f"UPDATE {table} SET is_active = :status WHERE id = :id"
-    run_update(query, {"status": 1 if status else 0, "id": entity_id})
+    run_update(query, {"status": status, "id": entity_id})
     
     # Smart cleanup if deactivating
     if not status:
@@ -73,13 +75,13 @@ def set_active_status(table, entity_id, status):
             # Set teacher_id to NULL in Classes
             run_update("UPDATE Classes SET teacher_id = NULL WHERE teacher_id = :id", {"id": entity_id})
             # Also update the corresponding User account if it exists
-            run_update("UPDATE Users SET is_active = 0 WHERE teacher_id = :id", {"id": entity_id})
+            run_update("UPDATE Users SET is_active = FALSE WHERE teacher_id = :id", {"id": entity_id})
         elif table == 'Rooms':
             # Set room_id to NULL in Classes
             run_update("UPDATE Classes SET room_id = NULL WHERE room_id = :id", {"id": entity_id})
     elif status and table == 'Teachers':
         # If reactivating a teacher, reactivate their user account too
-        run_update("UPDATE Users SET is_active = 1 WHERE teacher_id = :id", {"id": entity_id})
+        run_update("UPDATE Users SET is_active = TRUE WHERE teacher_id = :id", {"id": entity_id})
 
 def delete_entity(table, entity_id):
     # Check for dependencies first (simplified)
