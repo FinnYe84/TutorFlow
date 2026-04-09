@@ -5,37 +5,37 @@ import os
 
 # Use SQLite for local development, PostgreSQL (Supabase) for deployment
 
-def get_connection():
-    try:
-        if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
-            # We add a connection timeout so it doesn't hang forever
-            conn = st.connection("postgresql", type="sql", connect_args={'connect_timeout': 10})
-            # Try a tiny dummy query to force the connection to actually happen
-            conn.query("SELECT 1", ttl=0) 
-            return conn
-        else:
-            return sqlite3.connect("tutor_management.db")
-    except Exception as e:
-        # This will print the EXACT error message on your website
-        st.error(f"⚠️ Database Connection Failed: {str(e)}")
-        return None
-
-
 ###def get_connection():
-###    st.write(f"Secrets keys found: {list(st.secrets.keys())}")
-###    
-###    if "connections" in st.secrets:
-###         st.write("✅ Found 'connections' in secrets")
-###    else:
-###         st.error("❌ 'connections' NOT found in secrets. Check your formatting!")
-###    if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
-###        # Use st.connection for PostgreSQL
-###        conn = st.connection("postgresql", type="sql")
-###        return conn
-###    else:
-###        # Fallback to SQLite locally
-###        DB_NAME = "tutor_management.db"
-###        return sqlite3.connect(DB_NAME)
+###    try:
+###        if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
+###            # We add a connection timeout so it doesn't hang forever
+###            conn = st.connection("postgresql", type="sql", connect_args={'connect_timeout': 10})
+###            # Try a tiny dummy query to force the connection to actually happen
+###            conn.query("SELECT 1", ttl=0) 
+###            return conn
+###        else:
+###            return sqlite3.connect("tutor_management.db")
+###    except Exception as e:
+###        # This will print the EXACT error message on your website
+###        st.error(f"⚠️ Database Connection Failed: {str(e)}")
+###        return None
+
+
+def get_connection():
+    st.write(f"Secrets keys found: {list(st.secrets.keys())}")
+    
+    if "connections" in st.secrets:
+         st.write("✅ Found 'connections' in secrets")
+    else:
+         st.error("❌ 'connections' NOT found in secrets. Check your formatting!")
+    if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
+        # Use st.connection for PostgreSQL
+        conn = st.connection("postgresql", type="sql")
+        return conn
+    else:
+        # Fallback to SQLite locally
+        DB_NAME = "tutor_management.db"
+        return sqlite3.connect(DB_NAME)
 
 def run_query(query, params=()):
     conn = get_connection()
